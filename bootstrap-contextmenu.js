@@ -9,7 +9,26 @@
  * Licensed under MIT
  * ========================================================= */
 
-;(function($) {
+/*
+ * Corrections By Roman Shuplov
+ * 
+ * Use this version of file until version of this library < 0.3.3. It will need to diff after apdated library.
+ * Added previous pull requests
+ * Changed target for scrollLeft() -> to window
+ * 
+ * Now real version is 0.3.2
+ * 
+ */
+
+(function (root, factory) {
+    if (typeof define === 'function' && define.amd) {
+        define(['jquery'], factory);
+    } else if (typeof exports === 'object') {
+        module.exports = factory(require('jquery'));
+    } else {
+        factory(root.jQuery);
+  }
+}(this, function ($) {
 
 	'use strict';
 
@@ -21,8 +40,11 @@
 		this.$element = $(element);
 
 		this.before = options.before || this.before;
+                this.after = options.after || this.after;
 		this.onItem = options.onItem || this.onItem;
 		this.scopes = options.scopes || null;
+                this.trigger = options.trigger || 'right';
+                this.container = options.container || window;
 
 		if (options.target) {
 			this.$element.data('target', options.target);
@@ -87,6 +109,11 @@
 
 			$('html')
 				.off('click.context.data-api', $menu.selector);
+                        
+                        if (typeof e !== 'object') return;
+                        
+                        if (!this.after.call(this,e,$(e.currentTarget))) return;
+                        
 			// Don't propagate click event so other currently
 			// opened menus won't close.
 			e.stopPropagation();
@@ -100,12 +127,20 @@
 			return true;
 		}
 
+                ,after: function(e) {
+			return true;
+		}
+
 		,onItem: function(e) {
 			return true;
 		}
 
 		,listen: function () {
-			this.$element.on('contextmenu.context.data-api', this.scopes, $.proxy(this.show, this));
+			var listenEvent = 'contextmenu';
+			if (this.trigger === 'left') {
+				listenEvent = 'click';
+			}
+			this.$element.on(listenEvent+'.context.data-api', this.scopes, $.proxy(this.show, this));
 			$('html').on('click.context.data-api', $.proxy(this.closemenu, this));
 			$('html').on('keydown.context.data-api', $.proxy(this.keydown, this));
 		}
@@ -137,20 +172,22 @@
 		,getPosition: function(e, $menu) {
 			var mouseX = e.clientX
 				, mouseY = e.clientY
-				, boundsX = $(window).width()
-				, boundsY = $(window).height()
+				, boundsX = $(this.container).width()
+				, boundsY = $(this.container).height()
 				, menuWidth = $menu.find('.dropdown-menu').outerWidth()
 				, menuHeight = $menu.find('.dropdown-menu').outerHeight()
 				, tp = {"position":"absolute","z-index":9999}
-				, Y, X, parentOffset;
+				, Y, X, parentOffset, menuParentOffset;
 
 			if (mouseY + menuHeight > boundsY) {
-				Y = {"top": mouseY - menuHeight + $(window).scrollTop()};
+				Y = {"top": mouseY - menuHeight + $(this.container).scrollTop()};
 			} else {
-				Y = {"top": mouseY + $(window).scrollTop()};
+				Y = {"top": mouseY + $(this.container).scrollTop()};
 			}
 
-			if ((mouseX + menuWidth > boundsX) && ((mouseX - menuWidth) > 0)) {
+                        parentOffset = this.offsetPosition($(this.container).get(0)) || {left: 0, top: 0};
+
+                        if ((mouseX + menuWidth - parentOffset.left > boundsX) && ((mouseX - menuWidth) > 0)) {
 				X = {"left": mouseX - menuWidth + $(window).scrollLeft()};
 			} else {
 				X = {"left": mouseX + $(window).scrollLeft()};
@@ -159,12 +196,21 @@
 			// If context-menu's parent is positioned using absolute or relative positioning,
 			// the calculated mouse position will be incorrect.
 			// Adjust the position of the menu by its offset parent position.
-			parentOffset = $menu.offsetParent().offset();
-			X.left = X.left - parentOffset.left;
-			Y.top = Y.top - parentOffset.top;
+			menuParentOffset = $menu.offsetParent().offset() || { left: 0, top: 0};
+			X.left = X.left - menuParentOffset.left + $menu.offsetParent().scrollLeft();
+			Y.top = Y.top - menuParentOffset.top;
  
 			return $.extend(tp, Y, X);
 		}
+                ,offsetPosition: function (element) {
+                    var offsetLeft = 0, offsetTop = 0;
+                    do {
+                        offsetLeft += element.offsetLeft;
+                        offsetTop  += element.offsetTop;
+                    } while (element = element.offsetParent);
+                    return {left:offsetLeft, top:offsetTop};
+                }
+
 
 	};
 
@@ -202,4 +248,4 @@
 			e.stopPropagation();
 		});
 		
-}(jQuery));
+}));
